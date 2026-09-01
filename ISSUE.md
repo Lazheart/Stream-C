@@ -10,7 +10,7 @@ El siguiente texto debe ser eliminar en su repositorio.
 ## Plataforma de Streaming
 El objetivo del proyecto final es implementar una plataforma de **streaming**. Un programa que administre la **búsqueda y visualización** de la sinopsis de películas. Para ello se debe implementar las siguientes operaciones:
 
-* El programa debe leer la base de datos en forma **.csv**. La base de datos puede ser descargada desde el siguiente [link] (https://drive.google.com/file/d/1UJkRuCF8UD92W_DT7S8dXCYzaR_9wqB_/view?usp=sharing). El grupo es responsable del **pre-procesamiento de los datos**.
+* El programa debe leer la base de datos en forma **.csv**. La base de datos puede ser descargada desde el siguiente [link] (https://drive.google.com/file/d/1Gae6uXFvvu5FbVNw3H2l69OpByFALqBd/). El grupo es responsable del **pre-procesamiento de los datos**.
 * El programa debe cargar el contenido corregido del archivo en un **Árbol** que permita la búsqueda rápida de una película. Los caracteres (letras y números) deben ser los valores que se almacenen en los nodos del Árbol. Puede utilizar como referencia estructuras como los **Tries**, **Suffix Trees**, etc." La elección del tipo de Árbol queda a criterio del grupo y debe ser justificada y documentada en el repositorio.
 * Para buscar una película se debe utilizar una **palabra, frase o sub-palabra**. Ejemplo:
   - Si se busca la palabra "barco", el programa debería encontrar todas las películas en las cuales la palabra "barco" este en el título o sinópsis.
