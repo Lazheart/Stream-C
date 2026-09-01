@@ -1,0 +1,6 @@
+build
+programa
+**.o
+**/*.csv
+wiki_movie_plots_deduped.csv
+data/*.csv
