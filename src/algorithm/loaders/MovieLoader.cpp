@@ -1,4 +1,4 @@
-#include "Movie.h"
+#include "../models/Movie.h"
 #include <vector>
 
 class MovieLoader {

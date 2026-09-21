@@ -3,9 +3,7 @@
 #include <string>
 #include <vector>
 
-/**
- * @brief Represents a single movie record loaded from the dataset.
- */
+// Represents a single movie record loaded from the dataset.
 struct Movie {
     int id;
     long int year;
