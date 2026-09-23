@@ -1,5 +1,8 @@
 # Análisis y Preprocesamiento de Datos
 
+La implementación y sus decisiones están descritas en [README.md](README.md).
+La validación del dataset entregado está registrada en [RESULTADOS.md](RESULTADOS.md).
+
 Los datos utilizados en este proyecto corresponden a una base de datos pública de películas, proporcionada como archivo **CSV**. La base de datos original puede ser descargada desde el siguiente enlace:
 
 [Base de datos de películas](https://drive.google.com/file/d/1Gae6uXFvvu5FbVNw3H2l69OpByFALqBd/)
