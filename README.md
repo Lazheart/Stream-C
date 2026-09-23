@@ -32,6 +32,6 @@ Streaming-C/
 | Colaborador | github | descripcion |
 |----------|----------|----------|
 | Lazheart   | [Link](https://github.com/lazheart)   | UI Web y Algoritmos |
-| LuvAmoris   | [Link](https://github.com/luv-amori133)   | Integridad de Datos |
+| sir-alexng   | [Link](https://github.com/sir-alexng)   | Integridad de Datos |
 | BryanSSS   | [Link](https://github.com/Bryannsss140101)   | Algoritmos de Busqueda   |
 | brandonRKO   | [Link](https://github.com/brandonRKO)   | Integridad de Datos   |
