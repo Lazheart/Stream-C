@@ -1,0 +1,60 @@
+name: CI - Build C++ & WASM
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-native:
+    name: Compile & Test C++ (Native)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libcurl4-openssl-dev
+
+      - name: Verify C++ Compilation
+        run: |
+          make PREPROCESS_BIN=build/cleanData
+          make test-preprocess
+          g++ -Wall -Wextra -std=c++17 main.cpp -o programa
+
+  build-wasm:
+    name: Compile C++ to WebAssembly
+    runs-on: ubuntu-latest
+    needs: build-native
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Emscripten SDK
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.53
+          actions-cache-folder: 'emsdk-cache'
+
+      - name: Verify Emscripten Installation
+        run: emcc -v
+
+      - name: Compile to WASM
+        run: |
+          mkdir -p web/public
+          make wasm
+
+      - name: Upload WASM Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-dist
+          path: |
+            web/public/*.wasm
+            web/public/*.js
+          if-no-files-found: error

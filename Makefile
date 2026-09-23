@@ -45,4 +45,13 @@ build/test_preprocessing: tests/test_preprocessing.cpp
 test-preprocess: $(PREPROCESS_BIN) build/test_preprocessing
 	./build/test_preprocessing ./$(PREPROCESS_BIN)
 
-.PHONY: preprocess test-preprocess
+# WebAssembly
+EMCC ?= emcc
+EMFLAGS ?= -O3 -std=c++17 -s WASM=1 -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]' -s ALLOW_MEMORY_GROWTH=1
+
+wasm: main.cpp
+	mkdir -p web/public
+	$(EMCC) $(EMFLAGS) main.cpp -o web/public/streaming.js
+
+.PHONY: run clean preprocess test-preprocess wasm
+
