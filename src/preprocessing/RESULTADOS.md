@@ -22,8 +22,9 @@ visualmente vacío. Se sustituyeron por `unknown` igual que los vacíos ordinari
 Validación realizada:
 
 1. Compilación C++17 con `-Wall -Wextra`, sin advertencias.
-2. Siete pruebas automatizadas de caja negra aprobadas (`make test-preprocess`).
-3. Lectura independiente del original y del resultado con el módulo CSV de Python:
+2. Siete pruebas automatizadas de caja negra en C++ aprobadas (`make test-preprocess`).
+3. Verificación adicional realizada durante el desarrollo (no requerida para ejecutar
+   el proyecto): lectura independiente del original y del resultado con el módulo CSV de Python:
    comparación de las 34.886 filas y sus ocho campos; cada campo no vacío coincide
    exactamente con el original y los vacíos se convierten a `unknown`.
 4. Segunda ejecución del limpiador sobre el CSV limpio: salida idéntica byte a byte,

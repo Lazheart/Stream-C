@@ -38,7 +38,11 @@ $(PREPROCESS_BIN): src/preprocessing/cleanData.cpp
 preprocess: $(PREPROCESS_BIN)
 	./$(PREPROCESS_BIN) "$(INPUT)" "$(OUTPUT)" "$(REPORT)"
 
-test-preprocess: $(PREPROCESS_BIN)
-	python3 tests/test_preprocessing.py ./$(PREPROCESS_BIN)
+build/test_preprocessing: tests/test_preprocessing.cpp
+	mkdir -p build
+	$(CXX) $(CXXFLAGS) $< -o $@
+
+test-preprocess: $(PREPROCESS_BIN) build/test_preprocessing
+	./build/test_preprocessing ./$(PREPROCESS_BIN)
 
 .PHONY: preprocess test-preprocess

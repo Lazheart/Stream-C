@@ -28,8 +28,10 @@ repositorio. El programa también puede invocarse directamente:
 make test-preprocess
 ```
 
-Las pruebas usan Python 3 y su biblioteca estándar como lector independiente;
-Python no forma parte de la aplicación ni de su proceso de limpieza.
+Las siete pruebas están implementadas en C++17 en `tests/test_preprocessing.cpp`.
+Ejecutan el limpiador sobre archivos temporales y comparan la salida con resultados
+esperados. No requieren Python. La ejecución de pruebas utiliza la shell de
+macOS/Linux para invocar el programa.
 
 ## Contrato para el módulo de carga
 
