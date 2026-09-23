@@ -10,15 +10,15 @@
 
 using namespace std;
 
-// fs abrevia filesystem, que permite comprobar y renombrar archivos.
+// abreviatura para trabajar con rutas y archivos
 namespace fs = filesystem;
-// Una fila es un vector con los campos de una pelicula.
+// los campos de una pelicula
 using Row = vector<string>;
 const array<string, 8> columns = {
     "Release Year", "Title", "Origin/Ethnicity", "Director",
     "Cast", "Genre", "Wiki Page", "Plot"};
 
-// Una fila logica puede contener varios saltos de linea entre comillas.
+// una pelicula puede ocupar varias lineas del archivo
 class CsvReader {
     istream& input;
 public:
@@ -75,16 +75,26 @@ public:
 };
 
 bool blank(const string& s) {
-    // Incluye espacios Unicode, por ejemplo NBSP (U+00A0) presente en el dataset.
+    // tambien cuenta los espacios invisibles que encontramos en el dataset
     for (size_t i = 0; i < s.size();) {
         auto c = static_cast<unsigned char>(s[i++]);
         uint32_t codePoint = c;
         int remainingBytes = 0;
-        if (c >= 0xC2 && c <= 0xDF) { codePoint = c & 0x1F; remainingBytes = 1; }
-        else if (c >= 0xE0 && c <= 0xEF) { codePoint = c & 0x0F; remainingBytes = 2; }
-        else if (c >= 0xF0 && c <= 0xF4) { codePoint = c & 7; remainingBytes = 3; }
+        if (c >= 0xC2 && c <= 0xDF) {
+            codePoint = c & 0x1F;
+            remainingBytes = 1;
+        }
+        else if (c >= 0xE0 && c <= 0xEF) {
+            codePoint = c & 0x0F;
+            remainingBytes = 2;
+        }
+        else if (c >= 0xF0 && c <= 0xF4) {
+            codePoint = c & 7;
+            remainingBytes = 3;
+        }
         else if (c >= 0x80) return false;
-        while (remainingBytes--) {
+        while (remainingBytes > 0) {
+            --remainingBytes;
             if (i == s.size()) return false;
             auto next = static_cast<unsigned char>(s[i++]);
             if ((next & 0xC0) != 0x80) return false;
@@ -97,18 +107,36 @@ bool blank(const string& s) {
     return true;
 }
 
-// Validacion UTF-8 sin alterar tildes, mayusculas ni caracteres de otros idiomas.
+// revisa la codificacion sin cambiar el texto
 bool validUtf8(const string& s) {
     for (size_t i = 0; i < s.size();) {
         const auto c = static_cast<unsigned char>(s[i++]);
-        if (c < 0x80) { if (c == 0) return false; continue; }
+        if (c < 0x80) {
+            if (c == 0) {
+                return false;
+            }
+            continue;
+        }
         int remainingBytes;
         uint32_t codePoint, minimum;
-        if (c >= 0xC2 && c <= 0xDF) { remainingBytes = 1; codePoint = c & 0x1F; minimum = 0x80; }
-        else if (c >= 0xE0 && c <= 0xEF) { remainingBytes = 2; codePoint = c & 0x0F; minimum = 0x800; }
-        else if (c >= 0xF0 && c <= 0xF4) { remainingBytes = 3; codePoint = c & 7; minimum = 0x10000; }
+        if (c >= 0xC2 && c <= 0xDF) {
+            remainingBytes = 1;
+            codePoint = c & 0x1F;
+            minimum = 0x80;
+        }
+        else if (c >= 0xE0 && c <= 0xEF) {
+            remainingBytes = 2;
+            codePoint = c & 0x0F;
+            minimum = 0x800;
+        }
+        else if (c >= 0xF0 && c <= 0xF4) {
+            remainingBytes = 3;
+            codePoint = c & 7;
+            minimum = 0x10000;
+        }
         else return false;
-        while (remainingBytes--) {
+        while (remainingBytes > 0) {
+            --remainingBytes;
             if (i == s.size()) return false;
             const auto next = static_cast<unsigned char>(s[i++]);
             if ((next & 0xC0) != 0x80) return false;
@@ -117,6 +145,34 @@ bool validUtf8(const string& s) {
         if (codePoint < minimum || codePoint > 0x10FFFF || (codePoint >= 0xD800 && codePoint <= 0xDFFF)) return false;
     }
     return true;
+}
+
+// devuelve el motivo del descarte, o un texto vacio si la fila sirve
+string validateRow(const Row& row) {
+    if (row.size() < 8) {
+        return "menos_de_ocho_columnas";
+    }
+    for (const string& field : row) {
+        if (!validUtf8(field)) {
+            return "utf8_invalido_o_nul";
+        }
+    }
+    if (blank(row[1]) && blank(row[6])) {
+        return "sin_titulo_ni_enlace";
+    }
+    return "";
+}
+
+// guarda que columnas cambiaron para contarlas despues
+array<bool, 8> replaceEmptyFields(Row& row) {
+    array<bool, 8> replaced{};
+    for (size_t i = 0; i < 8; ++i) {
+        if (blank(row[i])) {
+            row[i] = "unknown";
+            replaced[i] = true;
+        }
+    }
+    return replaced;
 }
 
 string serialize(const Row& row) {
@@ -128,7 +184,7 @@ string serialize(const Row& row) {
         if (quote) result += '"';
         for (char c : field) {
             result += c;
-            // En CSV, una comilla dentro del texto se escribe dos veces.
+            // las comillas dentro del texto se escriben dos veces
             if (c == '"') {
                 result += '"';
             }
@@ -138,7 +194,11 @@ string serialize(const Row& row) {
     return result + '\n';
 }
 
-struct Rejection { size_t record, line; string reason; };
+struct Rejection {
+    size_t record;
+    size_t line;
+    string reason;
+};
 
 int main(int argc, char** argv) {
     if (argc != 4) {
@@ -149,7 +209,7 @@ int main(int argc, char** argv) {
     fs::path outputTmp = output.string() + ".tmp", reportTmp = report.string() + ".tmp";
     bool ownOutputTmp = false, ownReportTmp = false;
     try {
-        // Nunca sobreescribir originales, resultados previos ni temporales ajenos.
+        // no sobrescribir archivos que ya existen
         unordered_set<string> paths;
         for (const auto& p : {fs::path(argv[1]), output, report, outputTmp, reportTmp})
             if (!paths.insert(fs::weakly_canonical(p).string()).second)
@@ -158,11 +218,12 @@ int main(int argc, char** argv) {
             if (fs::exists(p)) throw runtime_error("La ruta ya existe: " + p.string());
         ifstream input(argv[1], ios::binary);
         if (!input) throw runtime_error("No se pudo abrir el CSV original");
-        // BOM UTF-8 opcional; el resto de la codificacion se valida por registro.
+        // algunos CSV traen estos tres bytes antes de la cabecera
         char bom[3];
         input.read(bom, 3);
         if (input.gcount() != 3 || string(bom, 3) != "\xEF\xBB\xBF") {
-            input.clear(); input.seekg(0);
+            input.clear();
+            input.seekg(0);
         }
         CsvReader reader(input);
         Row row;
@@ -180,22 +241,19 @@ int main(int argc, char** argv) {
             const auto firstLine = reader.line;
             if (!reader.read(row)) break;
             ++total;
-            string reason;
-            if (row.size() < 8) reason = "menos_de_ocho_columnas";
-            else {
-                for (const auto& value : row)
-                    if (!validUtf8(value)) { reason = "utf8_invalido_o_nul"; break; }
-                if (reason.empty() && blank(row[1]) && blank(row[6]))
-                    reason = "sin_titulo_ni_enlace";
+            string reason = validateRow(row);
+            if (!reason.empty()) {
+                rejected.push_back({total, firstLine, reason});
+                continue;
             }
-            if (!reason.empty()) { rejected.push_back({total, firstLine, reason}); continue; }
-            if (row.size() > 8) { ++extraRows; extraFields += row.size() - 8; row.resize(8); }
-            array<bool, 8> replaced{};
-            for (size_t i = 0; i < 8; ++i)
-                if (blank(row[i])) {
-                    row[i] = "unknown";
-                    replaced[i] = true;
-                }
+
+            if (row.size() > 8) {
+                ++extraRows;
+                extraFields += row.size() - 8;
+                row.resize(8);
+            }
+
+            array<bool, 8> replaced = replaceEmptyFields(row);
             const auto csvLine = serialize(row);
             if (uniqueRows.count(csvLine) > 0) {
                 ++duplicates;
@@ -236,8 +294,12 @@ int main(int argc, char** argv) {
         if (!reportFile) throw runtime_error("Error escribiendo el reporte");
         fs::rename(reportTmp, report);
         ownReportTmp = false;
-        try { fs::rename(outputTmp, output); }
-        catch (...) { fs::remove(report); throw; }
+        try {
+            fs::rename(outputTmp, output);
+        } catch (...) {
+            fs::remove(report);
+            throw;
+        }
         ownOutputTmp = false;
         cout << "Leidos: " << total << " | Conservados: " << accepted
                   << " | Descartados: " << rejected.size() << '\n';

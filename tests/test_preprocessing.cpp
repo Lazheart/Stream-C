@@ -23,7 +23,7 @@ string readFile(const fs::path& path) {
     check(bool(file), "No se pudo leer " + path.string());
     return string(istreambuf_iterator<char>(file), istreambuf_iterator<char>());
 }
-// Protege rutas con espacios o apostrofes al ejecutar en macOS/Linux.
+// permite usar rutas con espacios o apostrofes
 string shellQuote(const string& value) {
     string result = "'";
     for (char c : value) result += c == '\'' ? "'\"'\"'" : string(1, c);
@@ -59,13 +59,13 @@ int main(int argc, char** argv) {
         to_string(chrono::steady_clock::now().time_since_epoch().count()));
     try {
         check(fs::create_directory(folder), "No se pudo crear carpeta temporal");
-        // 1. Texto complicado: comas, comillas, Unicode y saltos internos.
+        // texto con comas, comillas y varias lineas
         string complex = "2000,\"El \"\"barco\"\", fantasma\",Perú,Ana,Actor,Drama,url,\"Primera línea\r\nSegunda línea\n日本語, \"\"sí\"\"\"";
         check(run(string("\xEF\xBB\xBF") + header + complex) == 0, "Fallo con texto complejo");
         check(readFile(folder / "clean.csv") == header + complex + "\n", "Se altero el texto");
         pass("comillas, multilinea, Unicode, BOM y final sin salto");
 
-        // 2. Compara toda la salida con el resultado esperado, no solo contadores.
+        // comprobar las filas limpias y los contadores
         string empty = "2000,Pelicula,Peru,\xC2\xA0, \t\xE2\x80\x83,,url,Trama\n";
         string fallback = "2000,,Peru,Ana,Actor,Drama,url,Trama\n";
         string extra = "2000,Otra,Peru,Ana,Actor,Drama,url,Trama,extra,extra2\n";
@@ -81,14 +81,14 @@ int main(int argc, char** argv) {
              "\"Cast\": 1", "\"registro\": 2,", "\"registro\": 4,", "\"registro\": 5,"}) reportContains(field);
         pass("vacios, duplicados, descartes, extras y titulos repetidos");
 
-        // 3. Codificacion invalida.
+        // una fila con codificacion incorrecta
         check(run(header + "2000,Pelicula,Peru,Ana," + string(1, char(0xFF)) + ",Drama,url,Trama\n") == 0,
               "Fallo al descartar UTF-8 invalido");
         reportContains("utf8_invalido_o_nul");
         check(readFile(folder / "clean.csv") == header, "Se conservo UTF-8 invalido");
         pass("UTF-8 invalido registrado como descarte");
 
-        // 4. Nunca publicar una salida parcial si las comillas estan rotas.
+        // si hay comillas rotas no debe quedar una salida incompleta
         for (const string tail : {"2000,\"unclosed", "2000,ba\"d,x", "2000,\"closed\"oops,x"}) {
             check(run(header + movie + tail) != 0, "Se aceptaron comillas rotas");
             for (const string name : {"clean.csv", "report.json", "clean.csv.tmp", "report.json.tmp"})
@@ -96,12 +96,12 @@ int main(int argc, char** argv) {
         }
         pass("comillas rotas sin archivos parciales");
 
-        // 5. Cabecera incompatible.
+        // columnas que no corresponden al dataset
         check(run("Title,Plot\na,b\n") != 0, "Se acepto una cabecera incorrecta");
         check(!fs::exists(folder / "clean.csv"), "Se genero salida con cabecera incorrecta");
         pass("cabecera incorrecta rechazada");
 
-        // 6. Proteccion del original y de los resultados existentes.
+        // no tocar el original ni un resultado que ya existe
         check(run(header + movie) == 0, "Fallo creando resultado");
         string previous = readFile(folder / "clean.csv");
         check(execute("clean.csv", "new-report.json") != 0, "Se sobrescribio el resultado");
@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
         check(readFile(folder / "input.csv") == header + movie, "Cambio el original");
         pass("proteccion de originales y resultados existentes");
 
-        // 7. Un archivo con cabecera y sin peliculas es valido.
+        // archivo con cabecera pero sin peliculas
         check(run(header) == 0, "Fallo con dataset sin peliculas");
         reportContains("\"registros_leidos\": 0");
         check(readFile(folder / "clean.csv") == header, "Salida vacia incorrecta");

@@ -33,6 +33,26 @@ Ejecutan el limpiador sobre archivos temporales y comparan la salida con resulta
 esperados. No requieren Python. La ejecución de pruebas utiliza la shell de
 macOS/Linux para invocar el programa.
 
+## Qué hace cada función
+
+- `CsvReader::read`: lee una película completa, aunque tenga varias líneas.
+- `blank`: comprueba si un campo está vacío o contiene solo espacios.
+- `validUtf8`: revisa que los caracteres tengan una codificación válida.
+- `validateRow`: indica si una fila debe descartarse y por qué.
+- `replaceEmptyFields`: sustituye vacíos por `unknown`.
+- `serialize`: convierte la fila en texto CSV con las comillas necesarias.
+- `main`: abre los archivos, recorre las filas y escribe el resultado y el reporte.
+
+`make test-preprocess` es un atajo definido en el Makefile. También se pueden
+compilar y ejecutar las pruebas directamente desde la raíz del repositorio:
+
+```sh
+mkdir -p build
+g++ -std=c++17 -Wall -Wextra src/preprocessing/cleanData.cpp -o build/cleanData
+g++ -std=c++17 -Wall -Wextra tests/test_preprocessing.cpp -o build/test_preprocessing
+./build/test_preprocessing ./build/cleanData
+```
+
 ## Contrato para el módulo de carga
 
 CSV UTF-8 sin BOM, con cabecera y exactamente estas ocho columnas en este orden:
