@@ -24,3 +24,25 @@ clean:
 	rm -f programa $(FETCH_BIN) $(DATA_FILE)
 
 .PHONY: run clean
+
+# Preprocesamiento independiente del programa principal y de la descarga.
+PREPROCESS_BIN = build/cleanData
+INPUT ?= data/data.csv
+OUTPUT ?= data/data_clean.csv
+REPORT ?= build/preprocessing_report.json
+
+$(PREPROCESS_BIN): src/preprocessing/cleanData.cpp
+	mkdir -p build
+	$(CXX) $(CXXFLAGS) $< -o $@
+
+preprocess: $(PREPROCESS_BIN)
+	./$(PREPROCESS_BIN) "$(INPUT)" "$(OUTPUT)" "$(REPORT)"
+
+build/test_preprocessing: tests/test_preprocessing.cpp
+	mkdir -p build
+	$(CXX) $(CXXFLAGS) $< -o $@
+
+test-preprocess: $(PREPROCESS_BIN) build/test_preprocessing
+	./build/test_preprocessing ./$(PREPROCESS_BIN)
+
+.PHONY: preprocess test-preprocess
