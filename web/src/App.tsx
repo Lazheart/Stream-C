@@ -261,11 +261,30 @@ function App() {
         <div className="emoji">⚠️</div>
         <h2>Error al inicializar</h2>
         <p>
-          No se pudo cargar el motor WebAssembly. Asegúrate de que los archivos
-          <code>streaming.js</code> y <code>streaming.wasm</code> estén en
-          <code>/public</code>, junto con <code>data_clean.csv</code>.
+          No se pudo inicializar la aplicación.
         </p>
-        <p style={{ fontSize: 13, color: 'var(--text-dim)' }}>{error}</p>
+        <div style={{ textAlign: 'left', background: 'rgba(255, 60, 60, 0.1)', padding: '16px', borderRadius: '8px', margin: '16px 0', border: '1px solid rgba(255, 60, 60, 0.2)' }}>
+          <strong style={{ color: '#ff4d4d', display: 'block', marginBottom: '8px' }}>Detalle técnico:</strong>
+          <code style={{ fontSize: 13, color: '#ff8a8a', display: 'block', padding: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
+            {error}
+          </code>
+          
+          {error.includes('Aborted') && (
+            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: '12px', lineHeight: 1.5 }}>
+              💡 <strong>Diagnóstico:</strong> El módulo WebAssembly de C++ sufrió un error fatal y se detuvo (`abort`). Esto suele deberse a:
+              <ul style={{ margin: '6px 0 0 20px' }}>
+                <li>El archivo <code>data_clean.csv</code> contiene filas corruptas o mal formateadas.</li>
+                <li>El archivo <code>streaming.wasm</code> no se encontró en el servidor (Error 404).</li>
+                <li>El motor se quedó sin memoria RAM disponible.</li>
+              </ul>
+            </div>
+          )}
+          {error.includes('fetch') && (
+            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: '12px', lineHeight: 1.5 }}>
+              💡 <strong>Diagnóstico:</strong> Hubo un problema de red al intentar descargar los recursos iniciales. Verifica que <code>data_clean.csv</code> y los archivos <code>.wasm</code> estén correctamente publicados.
+            </div>
+          )}
+        </div>
         <button className="btn btn-primary" onClick={() => window.location.reload()}>
           🔄 Reintentar
         </button>
