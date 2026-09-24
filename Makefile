@@ -52,10 +52,17 @@ test-search: build/test_search
 
 # WebAssembly
 EMCC ?= emcc
-EMFLAGS ?= -O3 -std=c++17 -s WASM=1 -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]' -s ALLOW_MEMORY_GROWTH=1
+EMFLAGS ?= -O3 -std=c++17 \
+	-s WASM=1 \
+	-s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","UTF8ToString","stringToUTF8","lengthBytesUTF8"]' \
+	-s EXPORTED_FUNCTIONS='["_wasm_load_csv","_wasm_is_ready","_wasm_movie_count","_wasm_search","_wasm_get_movie","_wasm_get_genres","_wasm_get_featured","_wasm_browse_genre","_wasm_get_user_data_json","_wasm_load_user_data_json","_wasm_add_watch_later","_wasm_remove_watch_later","_wasm_has_watch_later","_wasm_toggle_watch_later","_wasm_add_liked","_wasm_remove_liked","_wasm_has_liked","_wasm_toggle_liked","_wasm_clear_user_data","_malloc","_free"]' \
+	-s ALLOW_MEMORY_GROWTH=1 \
+	-s MODULARIZE=1 \
+	-s EXPORT_NAME='createStreamingModule' \
+	-s ENVIRONMENT='web'
 
-wasm: main.cpp src/helpers/userDataManager.cpp
+wasm: wasm_bridge.cpp
 	mkdir -p web/public
-	$(EMCC) $(EMFLAGS) main.cpp src/helpers/userDataManager.cpp -o web/public/streaming.js
+	$(EMCC) $(EMFLAGS) wasm_bridge.cpp -o web/public/streaming.js
 
 .PHONY: run clean preprocess test-preprocess test-search wasm

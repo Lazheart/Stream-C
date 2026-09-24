@@ -33,6 +33,20 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libcurl4-openssl-dev
+
+      - name: Download & Preprocess CSV Data
+        run: |
+          # Build the fetch tool, download data, then clean it
+          make data/fetchData
+          ./data/fetchData
+          make preprocess INPUT=data/data.csv OUTPUT=data/data_clean.csv REPORT=build/preprocessing_report.json
+          # Copy cleaned CSV to web/public so the frontend can fetch it
+          cp data/data_clean.csv web/public/data_clean.csv
+
       - name: Setup Emscripten SDK
         uses: mymindstorm/setup-emsdk@v14
         with:
