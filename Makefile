@@ -51,7 +51,7 @@ EMFLAGS ?= -O3 -std=c++17 -s WASM=1 -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap
 
 wasm: main.cpp
 	mkdir -p web/public
-	$(EMCC) $(EMFLAGS) main.cpp -o web/public/streaming.js
+	$(EMCC) $(EMFLAGS) main.cpp src/helpers/userDataManager.cpp -o web/public/streaming.js
 
 .PHONY: run clean preprocess test-preprocess wasm
 

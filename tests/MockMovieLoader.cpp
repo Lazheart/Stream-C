@@ -1,4 +1,4 @@
-#include "MovieLoader.cpp"
+#include "../src/algorithm/loaders/MovieLoader.cpp"
 #include <vector>
 
 class MockMovieLoader : public MovieLoader {
