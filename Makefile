@@ -23,8 +23,6 @@ run: programa
 clean:
 	rm -f programa $(FETCH_BIN) $(DATA_FILE)
 
-.PHONY: run clean
-
 # Preprocesamiento independiente del programa principal y de la descarga.
 PREPROCESS_BIN = build/cleanData
 INPUT ?= data/data.csv

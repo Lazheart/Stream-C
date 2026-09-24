@@ -44,6 +44,7 @@ class MovieTree {
     }
 
     // Returns ids of movies of the given genre released between start_year and end_year, inclusive.
+    // The genre lookup is case-insensitive.
     std::vector<int> range_query(const std::string &genre, int start_year, int end_year) const {
         std::vector<int> results;
 

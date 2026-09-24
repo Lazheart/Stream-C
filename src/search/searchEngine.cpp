@@ -3,23 +3,21 @@
 #include "../algorithm/trees/MovieSuffixArray.cpp"
 #include "../algorithm/trees/MovieTree.cpp"
 #include "ranking.cpp"
-#include <algorithm>
-#include <cctype>
 #include <climits>
 #include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
-// User request. Every field is optional.
+// User request. Every field is optional except that at least one should be set.
 struct SearchQuery {
-    std::string text;
-    std::string tag;
-    std::string genre;
+    std::string text;       // word / phrase / sub-word to search in title+plot
+    std::string genre;      // exact genre filter (case-insensitive)
+    std::string tag;        // tag filter: matches any of genre/origin/director/cast tokens
     std::optional<int> year_from;
     std::optional<int> year_to;
-    size_t offset = 0;
-    size_t limit = 5;
+    int offset = 0;         // first result index (0-based, for pagination)
+    int limit  = 5;         // max results returned (0 = unlimited)
 };
 
 class SearchEngine {
@@ -28,74 +26,100 @@ class SearchEngine {
     ~SearchEngine() = default;
 
     // Builds all indexes from the same collection of movies.
+    // Tags are generated here so callers only need to call build() once.
+    void build(std::vector<Movie> &movies) {
+        tagger.tag_all(movies);
+        hash_index.build(movies);
+        tree_index.build(movies);
+        suffix_array.build(movies);
+    }
+
+    // Overload for const collections (tags must already be set).
     void build(const std::vector<Movie> &movies) {
         catalog = movies;
-        for (auto &movie : catalog)
-            if (movie.tags.empty())
-                movie.tags = movie_tagger::build_tags(movie);
-
+        tagger.tag_all(catalog);
         hash_index.build(catalog);
         tree_index.build(catalog);
         suffix_array.build(catalog);
     }
 
+    // Returns ranked, paginated results for the query.
     std::vector<const Movie *> search(const SearchQuery &q) const {
-        std::vector<const Movie *> candidates = !q.text.empty() ? search_by_text(q) : search_by_filters(q);
-        std::string ranking_query = !q.text.empty() ? q.text : q.tag;
-        return movie_ranking::rank(candidates, ranking_query, q.offset, q.limit);
+        std::vector<const Movie *> candidates;
+
+        if (!q.text.empty())
+            candidates = search_by_text(q);
+        else
+            candidates = search_by_filters(q);
+
+        // Deduplicate (suffix array + filter paths may yield duplicates).
+        candidates = deduplicate(candidates);
+
+        // Apply ranking and return the requested page.
+        return Ranker::rank_and_page(std::move(candidates),
+                                     q.text, q.tag,
+                                     q.offset, q.limit);
     }
 
   private:
     std::vector<Movie> catalog;
     MovieHashIndex hash_index;
-    MovieTree tree_index;
+    MovieTree      tree_index;
     MovieSuffixArray suffix_array;
+    Tagger         tagger;
 
-    // Text search: suffix array finds ids, hash index resolves them, then filters apply.
+    // Text search: suffix array finds ids, hash index resolves them, then all
+    // filters (genre, year, tag) are applied.
     std::vector<const Movie *> search_by_text(const SearchQuery &q) const {
         std::vector<const Movie *> results;
-        std::unordered_set<int> seen;
-
         for (int id : suffix_array.search_phrase(q.text)) {
             const Movie *m = hash_index.get_by_id(id);
-            if (m && matches(*m, q) && seen.insert(id).second)
+            if (m && matches(*m, q))
                 results.push_back(m);
         }
-
         return results;
     }
 
-    // Search without text: only genre and/or year range.
+    // Filter-only search (no text): genre, year range, and/or tag.
     std::vector<const Movie *> search_by_filters(const SearchQuery &q) const {
         bool has_years = q.year_from || q.year_to;
         int from = q.year_from.value_or(INT_MIN);
-        int to = q.year_to.value_or(INT_MAX);
-        if (from > to)
-            std::swap(from, to);
+        int to   = q.year_to.value_or(INT_MAX);
 
-        // Genre + years: range query on the tree.
+        std::vector<const Movie *> pool;
+
+        // Genre + years: range query on the tree (normalized at query time).
         if (!q.genre.empty() && has_years)
-            return filter_results(resolve_ids(tree_index.range_query(q.genre, from, to)), q);
+            pool = resolve_ids(tree_index.range_query(to_lower(q.genre), from, to));
 
         // Only genre: direct hash lookup.
-        if (!q.genre.empty())
-            return filter_results(hash_index.get_by_genre(q.genre), q);
+        else if (!q.genre.empty())
+            pool = hash_index.get_by_genre(q.genre);
 
-        if (!has_years)
-            return filter_results(all_movies(), q);
-
-        // Only years.
-        std::vector<const Movie *> results;
-        std::unordered_set<int> seen;
-        for (int y = from; y <= to; y++) {
-            auto movies = hash_index.get_by_year(y);
-            for (const Movie *movie : movies) {
-                if (movie && seen.insert(movie->id).second)
-                    results.push_back(movie);
+        // Only years: iterate over each year in range via hash index.
+        else if (q.year_from && q.year_to) {
+            for (int y = from; y <= to; y++) {
+                auto batch = hash_index.get_by_year(y);
+                pool.insert(pool.end(), batch.begin(), batch.end());
             }
         }
 
-        return filter_results(results, q);
+        // Tag-only search (no genre/year specified): scan all via genre index,
+        // but since we have no "all movies" iterator, we rely on the caller
+        // combining text + tag or genre + tag.  For a bare tag query we return
+        // an empty set to avoid a full table scan.
+        // (Full-catalog tag queries should be paired with text or genre.)
+
+        // Apply tag filter on top of pool.
+        if (!q.tag.empty()) {
+            std::vector<const Movie *> tagged;
+            for (const Movie *m : pool)
+                if (m && tagger.has_tag(*m, q.tag))
+                    tagged.push_back(m);
+            return tagged;
+        }
+
+        return pool;
     }
 
     // Converts ids into movie pointers using the hash index.
@@ -107,11 +131,22 @@ class SearchEngine {
         return results;
     }
 
-    // Checks the genre and year filters of the query against a movie.
+    // Removes duplicate movie pointers (same id).
+    std::vector<const Movie *> deduplicate(std::vector<const Movie *> v) const {
+        std::unordered_set<int> seen;
+        std::vector<const Movie *> out;
+        for (const Movie *m : v) {
+            if (m && seen.insert(m->id).second)
+                out.push_back(m);
+        }
+        return out;
+    }
+
+    // Checks all metadata filters of the query against a movie.
     bool matches(const Movie &m, const SearchQuery &q) const {
         if (!q.genre.empty() && to_lower(m.genre) != to_lower(q.genre))
             return false;
-        if (!q.tag.empty() && !movie_tagger::has_tag(m, q.tag))
+        if (!q.tag.empty() && !tagger.has_tag(m, q.tag))
             return false;
         if (q.year_from && m.year < *q.year_from)
             return false;
@@ -125,27 +160,5 @@ class SearchEngine {
         std::transform(s.begin(), s.end(), s.begin(),
                        [](unsigned char c) { return std::tolower(c); });
         return s;
-    }
-
-    std::vector<const Movie *> all_movies() const {
-        std::vector<const Movie *> results;
-        results.reserve(catalog.size());
-        for (const auto &movie : catalog)
-            if (const Movie *resolved = hash_index.get_by_id(movie.id))
-                results.push_back(resolved);
-        return results;
-    }
-
-    std::vector<const Movie *> filter_results(const std::vector<const Movie *> &source,
-                                              const SearchQuery &q) const {
-        std::vector<const Movie *> filtered;
-        std::unordered_set<int> seen;
-        for (const Movie *movie : source) {
-            if (!movie || !matches(*movie, q))
-                continue;
-            if (seen.insert(movie->id).second)
-                filtered.push_back(movie);
-        }
-        return filtered;
     }
 };

@@ -10,4 +10,4 @@ class MovieLoader {
     virtual std::vector<Movie> load() = 0;
 };
 
-#endif
+#endif // MOVIE_LOADER_CPP

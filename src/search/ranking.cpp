@@ -1,3 +1,4 @@
+#pragma once
 #include "../algorithm/models/Movie.h"
 #include <algorithm>
 #include <cctype>
@@ -5,73 +6,93 @@
 #include <utility>
 #include <vector>
 
-namespace movie_ranking {
+// Weighted relevance score for a movie against a query text and an optional tag.
+// Weights:
+//   title match  : 5.0
+//   tag match    : 3.0
+//   plot match   : 1.0
+//   recency bias : year / 10000.0  (light tie-breaker, never dominates)
+struct Ranker {
+    static constexpr double W_TITLE = 5.0;
+    static constexpr double W_TAG   = 3.0;
+    static constexpr double W_PLOT  = 1.0;
 
-static std::string normalize(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return value;
-}
+    // Returns a relevance score >= 0 for movie m given query text and tag.
+    static double score(const Movie &m,
+                        const std::string &query_text,
+                        const std::string &query_tag) {
+        double s = 0.0;
 
-static int count_occurrences(const std::string &text, const std::string &query) {
-    if (query.empty())
-        return 0;
+        if (!query_text.empty()) {
+            std::string q = to_lower(query_text);
+            if (contains(to_lower(m.title), q))
+                s += W_TITLE;
+            if (contains(to_lower(m.plot), q))
+                s += W_PLOT;
+        }
 
-    std::string normalized_text = normalize(text);
-    std::string normalized_query = normalize(query);
+        if (!query_tag.empty()) {
+            std::string t = to_lower(query_tag);
+            // Check both the tags vector and raw genre/origin fields.
+            bool tag_hit = std::find(m.tags.begin(), m.tags.end(), t) != m.tags.end();
+            if (!tag_hit)
+                tag_hit = contains(to_lower(m.genre), t) ||
+                          contains(to_lower(m.origin), t) ||
+                          contains(to_lower(m.director), t) ||
+                          contains(to_lower(m.cast), t);
+            if (tag_hit)
+                s += W_TAG;
+        }
 
-    int count = 0;
-    size_t pos = 0;
-    while ((pos = normalized_text.find(normalized_query, pos)) != std::string::npos) {
-        ++count;
-        pos += normalized_query.size();
-    }
-    return count;
-}
+        // Light recency tie-breaker (0 < year/10000 < ~0.3 for movies up to 2025)
+        if (m.year > 0)
+            s += static_cast<double>(m.year) / 10000.0;
 
-static int count_tag_hits(const Movie &movie, const std::string &query) {
-    int hits = 0;
-    for (const auto &tag : movie.tags)
-        hits += count_occurrences(tag, query);
-    return hits;
-}
-
-std::vector<const Movie *> rank(const std::vector<const Movie *> &candidates,
-                                const std::string &query, size_t offset = 0, size_t limit = 5) {
-    std::vector<std::pair<double, const Movie *>> scored;
-    scored.reserve(candidates.size());
-
-    for (const Movie *movie : candidates) {
-        if (!movie)
-            continue;
-
-        double score = 0.0;
-        score += 5.0 * count_occurrences(movie->title, query);
-        score += 1.0 * count_occurrences(movie->plot, query);
-        score += 3.0 * count_tag_hits(*movie, query);
-        score += static_cast<double>(movie->year) / 10000.0;
-        scored.push_back({score, movie});
+        return s;
     }
 
-    std::sort(scored.begin(), scored.end(),
-              [](const auto &a, const auto &b) {
-                  if (a.first != b.first)
-                      return a.first > b.first;
-                  if (a.second->year != b.second->year)
-                      return a.second->year > b.second->year;
-                  return a.second->id < b.second->id;
-              });
+    // Sorts candidates by (score DESC, year DESC, id ASC) and returns the
+    // sub-page [offset, offset+limit).  limit == 0 means no limit.
+    static std::vector<const Movie *>
+    rank_and_page(std::vector<const Movie *> candidates,
+                  const std::string &query_text,
+                  const std::string &query_tag,
+                  int offset,
+                  int limit) {
+        // Compute scores once.
+        std::vector<std::pair<double, const Movie *>> scored;
+        scored.reserve(candidates.size());
+        for (const Movie *m : candidates)
+            scored.emplace_back(score(*m, query_text, query_tag), m);
 
-    std::vector<const Movie *> ranked;
-    if (offset >= scored.size() || limit == 0)
-        return ranked;
+        // Deterministic order: score DESC → year DESC → id ASC
+        std::sort(scored.begin(), scored.end(),
+                  [](const auto &a, const auto &b) {
+                      if (a.first != b.first)
+                          return a.first > b.first;
+                      if (a.second->year != b.second->year)
+                          return a.second->year > b.second->year;
+                      return a.second->id < b.second->id;
+                  });
 
-    size_t end = std::min(scored.size(), offset + limit);
-    ranked.reserve(end - offset);
-    for (size_t i = offset; i < end; ++i)
-        ranked.push_back(scored[i].second);
+        // Page slice.
+        std::vector<const Movie *> result;
+        int n = static_cast<int>(scored.size());
+        int start = std::min(offset, n);
+        int end   = (limit > 0) ? std::min(start + limit, n) : n;
+        for (int i = start; i < end; ++i)
+            result.push_back(scored[i].second);
+        return result;
+    }
 
-    return ranked;
-}
+  private:
+    static std::string to_lower(std::string s) {
+        std::transform(s.begin(), s.end(), s.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        return s;
+    }
 
-} // namespace movie_ranking
+    static bool contains(const std::string &haystack, const std::string &needle) {
+        return haystack.find(needle) != std::string::npos;
+    }
+};
