@@ -109,8 +109,19 @@ export async function initEngine(): Promise<number> {
   if (!resp.ok) throw new Error(`Failed to fetch CSV: ${resp.statusText}`);
   const csvText = await resp.text();
 
-  // Pass to C++
-  const count = mod.ccall('wasm_load_csv', 'number', ['string'], [csvText]) as number;
+  // Manually allocate memory for the huge string to avoid stack overflow in ccall
+  const lengthBytes = (mod as any).lengthBytesUTF8(csvText);
+  const ptr = (mod as any)._malloc(lengthBytes + 1);
+  if (!ptr) throw new Error('Failed to allocate memory for CSV');
+
+  let count = -1;
+  try {
+    (mod as any).stringToUTF8(csvText, ptr, lengthBytes + 1);
+    count = mod.ccall('wasm_load_csv', 'number', ['number'], [ptr]) as number;
+  } finally {
+    (mod as any)._free(ptr);
+  }
+
   if (count < 0) throw new Error('wasm_load_csv returned error');
   return count;
 }
