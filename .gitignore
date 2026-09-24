@@ -6,3 +6,4 @@ wiki_movie_plots_deduped.csv
 data/*.csv
 fetchData
 data/fetchData
+userData.json
