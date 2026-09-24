@@ -36,9 +36,11 @@ class SearchEngine {
 
     // Overload for const collections (tags must already be set).
     void build(const std::vector<Movie> &movies) {
-        hash_index.build(movies);
-        tree_index.build(movies);
-        suffix_array.build(movies);
+        catalog = movies;
+        tagger.tag_all(catalog);
+        hash_index.build(catalog);
+        tree_index.build(catalog);
+        suffix_array.build(catalog);
     }
 
     // Returns ranked, paginated results for the query.
@@ -60,6 +62,7 @@ class SearchEngine {
     }
 
   private:
+    std::vector<Movie> catalog;
     MovieHashIndex hash_index;
     MovieTree      tree_index;
     MovieSuffixArray suffix_array;
@@ -143,11 +146,11 @@ class SearchEngine {
     bool matches(const Movie &m, const SearchQuery &q) const {
         if (!q.genre.empty() && to_lower(m.genre) != to_lower(q.genre))
             return false;
+        if (!q.tag.empty() && !tagger.has_tag(m, q.tag))
+            return false;
         if (q.year_from && m.year < *q.year_from)
             return false;
         if (q.year_to && m.year > *q.year_to)
-            return false;
-        if (!q.tag.empty() && !tagger.has_tag(m, q.tag))
             return false;
         return true;
     }
