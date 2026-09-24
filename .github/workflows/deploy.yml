@@ -5,10 +5,6 @@ on:
     workflows: ["CI - Build C++ & WASM"]
     types:
       - completed
-    branches: [ main, master ]
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,7 +18,7 @@ concurrency:
 jobs:
   deploy:
     name: Build Frontend & Deploy to GitHub Pages
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     environment:
@@ -45,17 +41,16 @@ jobs:
           ./data/fetchData
           make preprocess INPUT=data/data.csv OUTPUT=data/data_clean.csv REPORT=build/preprocessing_report.json
           # Copy cleaned CSV to web/public so the frontend can fetch it
+          mkdir -p web/public
           cp data/data_clean.csv web/public/data_clean.csv
 
-      - name: Setup Emscripten SDK
-        uses: mymindstorm/setup-emsdk@v14
+      - name: Download WASM Artifacts
+        uses: actions/download-artifact@v4
         with:
-          version: 3.1.53
-
-      - name: Build WebAssembly Assets
-        run: |
-          mkdir -p web/public
-          make wasm
+          name: wasm-dist
+          path: web/public
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
