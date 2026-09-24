@@ -86,39 +86,52 @@ extern "C" {
 WASM_EXPORT int wasm_load_csv(const char *csv_text) {
     if (!csv_text) return -1;
 
-    // Write the CSV text to a temporary in-memory file via a stringstream,
-    // then parse it using the same CsvMovieLoader logic.
-    // Since CsvMovieLoader reads from a file, we create a temp file in the
-    // Emscripten virtual filesystem.
-#ifdef __EMSCRIPTEN__
-    // Write to virtual filesystem
-    {
-        std::ofstream tmp("/tmp/movies.csv");
-        if (!tmp.is_open()) return -1;
-        tmp << csv_text;
-        tmp.close();
-    }
     try {
-        CsvMovieLoader loader("/tmp/movies.csv");
-        g_movies = loader.load();
+        std::vector<Movie> movies;
+        const char* p = csv_text;
+        bool first_line = true;
+        int next_id = 1;
+        std::string line;
+
+        while (*p != '\0') {
+            const char* end = strchr(p, '\n');
+            if (!end) end = p + strlen(p);
+
+            line.assign(p, end - p);
+            if (*end == '\n') p = end + 1;
+            else p = end;
+
+            if (first_line) {
+                first_line = false;
+                continue;
+            }
+
+            if (trim(line).empty())
+                continue;
+
+            std::vector<std::string> fields = parse_csv_row(line);
+            while (fields.size() < 8) fields.push_back("");
+
+            Movie m;
+            m.id       = next_id++;
+            m.year     = parse_year(fields[0]);
+            m.title    = trim(fields[1]);
+            m.origin   = trim(fields[2]);
+            m.director = trim(fields[3]);
+            m.cast     = trim(fields[4]);
+            m.genre    = trim(fields[5]);
+            m.wiki_url = trim(fields[6]);
+            m.plot     = trim(fields[7]);
+
+            if (m.title.empty()) continue;
+
+            movies.push_back(std::move(m));
+        }
+
+        g_movies = std::move(movies);
     } catch (...) {
         return -1;
     }
-#else
-    // Native fallback for testing
-    {
-        std::ofstream tmp("/tmp/movies.csv");
-        if (!tmp.is_open()) return -1;
-        tmp << csv_text;
-        tmp.close();
-    }
-    try {
-        CsvMovieLoader loader("/tmp/movies.csv");
-        g_movies = loader.load();
-    } catch (...) {
-        return -1;
-    }
-#endif
 
     g_engine.build(g_movies);
     g_ready = true;
