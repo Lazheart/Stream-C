@@ -47,7 +47,7 @@ class MovieTree {
     std::vector<int> range_query(const std::string &genre, int start_year, int end_year) const {
         std::vector<int> results;
 
-        auto genre_it = by_genre.find(genre);
+        auto genre_it = by_genre.find(normalize(genre));
         if (genre_it == by_genre.end())
             return results;
 

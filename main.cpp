@@ -1,11 +1,21 @@
 #include <iostream>
-using namespace std;
+#include "src/algorithm/loaders/MockMovieLoader.cpp"
+#include "src/search/searchEngine.cpp"
 
+int main() {
+    MockMovieLoader loader;
+    SearchEngine engine;
+    engine.build(loader.load());
 
-int main(){
+    SearchQuery query;
+    query.text = "train";
+    query.limit = 5;
+    auto results = engine.search(query);
 
-    cout << "hola" << endl;
-    
-};
+    std::cout << "Resultados: " << results.size() << '\n';
+    for (const Movie *movie : results)
+        std::cout << "- " << movie->title << " (" << movie->year << ")\n";
 
+    return 0;
+}
 

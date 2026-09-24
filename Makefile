@@ -45,13 +45,19 @@ build/test_preprocessing: tests/test_preprocessing.cpp
 test-preprocess: $(PREPROCESS_BIN) build/test_preprocessing
 	./build/test_preprocessing ./$(PREPROCESS_BIN)
 
+build/test_search: tests/test_search.cpp
+	mkdir -p build
+	$(CXX) $(CXXFLAGS) $< -o $@
+
+test-search: build/test_search
+	./build/test_search
+
 # WebAssembly
 EMCC ?= emcc
 EMFLAGS ?= -O3 -std=c++17 -s WASM=1 -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]' -s ALLOW_MEMORY_GROWTH=1
 
-wasm: main.cpp
+wasm: main.cpp src/helpers/userDataManager.cpp
 	mkdir -p web/public
-	$(EMCC) $(EMFLAGS) main.cpp -o web/public/streaming.js
+	$(EMCC) $(EMFLAGS) main.cpp src/helpers/userDataManager.cpp -o web/public/streaming.js
 
-.PHONY: run clean preprocess test-preprocess wasm
-
+.PHONY: run clean preprocess test-preprocess test-search wasm
