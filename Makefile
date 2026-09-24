@@ -20,8 +20,14 @@ $(FETCH_BIN): data/fetchData.cpp
 run: programa
 	./programa
 
+cli: src/cli.cpp $(DATA_FILE)
+	$(CXX) $(CXXFLAGS) src/cli.cpp -o cli
+
+run-cli: cli
+	./cli
+
 clean:
-	rm -f programa $(FETCH_BIN) $(DATA_FILE)
+	rm -f programa cli $(FETCH_BIN) $(DATA_FILE)
 
 # Preprocesamiento independiente del programa principal y de la descarga.
 PREPROCESS_BIN = build/cleanData
