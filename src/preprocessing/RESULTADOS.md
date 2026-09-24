@@ -1,7 +1,6 @@
 # Resultado de la validación del dataset
 
-Entrada: `wiki_movie_plots_deduped.csv`, proporcionado por el usuario.
-No se verificó que sea idéntico al archivo de los enlaces externos del enunciado.
+Entrada: `wiki_movie_plots_deduped.csv`
 
 | Comprobación | Resultado |
 | --- | ---: |
