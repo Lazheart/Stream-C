@@ -57,14 +57,12 @@ static long parse_year(const std::string &s) {
     std::string t = trim(s);
     if (t.empty())
         return 0;
-    try {
-        size_t pos = 0;
-        long val = std::stol(t, &pos);
-        // Accept only if the entire string was consumed.
-        return (pos == t.size()) ? val : 0;
-    } catch (...) {
-        return 0;
+    char* end;
+    long val = std::strtol(t.c_str(), &end, 10);
+    if (end == t.c_str() + t.size()) {
+        return val;
     }
+    return 0;
 }
 
 // CSV loader: reads a file whose columns are (in order):
