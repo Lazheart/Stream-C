@@ -75,10 +75,10 @@ int main(int argc, char* argv[]) {
             const int limit = 10;
             
             while (true) {
-                SearchQuery q;
-                q.text = query_text;
-                q.offset = offset;
-                q.limit = limit;
+                SearchQuery q = SearchQueryBuilder()
+                                    .text(query_text)
+                                    .page(offset, limit)
+                                    .build();
                 
                 auto results = engine.search(q);
                 

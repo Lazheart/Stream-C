@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
-import type { Movie } from './wasm'
+import type { Movie, SearchParams } from './wasm'
 import {
   browseGenre,
   clearUserData,
@@ -83,6 +83,18 @@ function App() {
   // Modal
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null)
 
+  // Keep this helper above the initialization effect that calls it.
+  const syncUserStatus = useCallback(async (movies: Movie[]) => {
+    const liked = new Set<string>()
+    const watchLater = new Set<string>()
+    for (const m of movies) {
+      if (await hasLiked(m.title)) liked.add(m.title)
+      if (await hasWatchLater(m.title)) watchLater.add(m.title)
+    }
+    setLikedSet(liked)
+    setWatchLaterSet(watchLater)
+  }, [])
+
   // ── Initialise engine ────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -125,7 +137,7 @@ function App() {
     })()
 
     return () => { cancelled = true }
-  }, [])
+  }, [syncUserStatus])
 
   // ── Scroll listener for header ───────────────────────────────────────────
   useEffect(() => {
@@ -134,20 +146,8 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // ── Sync user status helper ──────────────────────────────────────────────
-  const syncUserStatus = useCallback(async (movies: Movie[]) => {
-    const liked = new Set<string>()
-    const watchLater = new Set<string>()
-    for (const m of movies) {
-      if (await hasLiked(m.title)) liked.add(m.title)
-      if (await hasWatchLater(m.title)) watchLater.add(m.title)
-    }
-    setLikedSet(liked)
-    setWatchLaterSet(watchLater)
-  }, [])
-
   // ── Search handler ───────────────────────────────────────────────────────
-  const doSearch = useCallback(async (offset = 0) => {
+  const doSearch = useCallback(async (offset = 0, overrides: Partial<SearchParams> = {}) => {
     const results = await search({
       text: searchQuery || undefined,
       genre: searchGenre || undefined,
@@ -155,6 +155,7 @@ function App() {
       yearTo: searchYearTo ? parseInt(searchYearTo) : undefined,
       offset,
       limit: searchLimit,
+      ...overrides,
     })
     setSearchResults(results)
     setSearchOffset(offset)
@@ -381,7 +382,13 @@ function App() {
             onSelectMovie={setSelectedMovie}
             onToggleLike={handleToggleLike}
             onToggleWatchLater={handleToggleWatchLater}
-            onBrowseGenre={(g) => { setSearchGenre(g); setSearchQuery(''); doSearch(0) }}
+            onBrowseGenre={(g) => {
+              setSearchGenre(g)
+              setSearchQuery('')
+              setSearchYearFrom('')
+              setSearchYearTo('')
+              doSearch(0, { text: undefined, genre: g, yearFrom: undefined, yearTo: undefined })
+            }}
           />
         )}
 

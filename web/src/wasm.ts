@@ -23,20 +23,26 @@ interface EmscriptenModule {
     returnType: string | null,
     argTypes: string[],
   ) => (...args: unknown[]) => unknown;
+  lengthBytesUTF8: (value: string) => number;
+  stringToUTF8: (value: string, destination: number, maxBytes: number) => void;
+  _malloc: (size: number) => number;
+  _free: (pointer: number) => void;
 }
 
 // ── Singleton module instance ───────────────────────────────────────────────
 let modulePromise: Promise<EmscriptenModule> | null = null;
+let enginePromise: Promise<number> | null = null;
 
 async function getModule(): Promise<EmscriptenModule> {
   if (!modulePromise) {
+    if (typeof createStreamingModule !== 'function') {
+      throw new Error('No se cargó streaming.js. Instala Emscripten y ejecuta "make wasm" antes de iniciar Vite.');
+    }
     modulePromise = createStreamingModule({
-      locateFile: (path: string) => {
-        // Vite serves from /public during dev; in production the base path
-        // is injected by vite.config.ts.
-        const base = import.meta.env.BASE_URL ?? '/';
-        return `${base}${path}`;
-      },
+      locateFile: (path: string, prefix?: string) => new URL(path, prefix || document.baseURI).href,
+    }).catch((error: unknown) => {
+      modulePromise = null;
+      throw new Error(`No se pudo iniciar WebAssembly (${String(error)}). Comprueba que streaming.wasm fue generado con "make wasm".`);
     });
   }
   return modulePromise;
@@ -101,29 +107,37 @@ const CSV_URL = (() => {
  * Initialise the engine: download CSV → pass to C++ → build indexes.
  * Returns the number of movies loaded.
  */
-export async function initEngine(): Promise<number> {
+export function initEngine(): Promise<number> {
+  if (!enginePromise) {
+    enginePromise = loadEngine().catch((error: unknown) => {
+      enginePromise = null;
+      throw error;
+    });
+  }
+  return enginePromise;
+}
+
+async function loadEngine(): Promise<number> {
   const mod = await getModule();
 
   // Fetch CSV dataset
   const resp = await fetch(CSV_URL);
-  if (!resp.ok) throw new Error(`Failed to fetch CSV: ${resp.statusText}`);
+  if (!resp.ok) throw new Error(`No se pudo cargar ${CSV_URL}: HTTP ${resp.status} ${resp.statusText}`);
   const csvText = await resp.text();
 
   // Manually allocate memory for the huge string to avoid stack overflow in ccall
-  const lengthBytes = (mod as any).lengthBytesUTF8(csvText);
-  const ptr = (mod as any)._malloc(lengthBytes + 1);
+  const lengthBytes = mod.lengthBytesUTF8(csvText);
+  const ptr = mod._malloc(lengthBytes + 1);
   if (!ptr) throw new Error('Failed to allocate memory for CSV');
 
-  let count = -1;
   try {
-    (mod as any).stringToUTF8(csvText, ptr, lengthBytes + 1);
-    count = mod.ccall('wasm_load_csv', 'number', ['number'], [ptr]) as number;
+    mod.stringToUTF8(csvText, ptr, lengthBytes + 1);
+    const count = mod.ccall('wasm_load_csv', 'number', ['number'], [ptr]) as number;
+    if (count < 0) throw new Error('wasm_load_csv returned error');
+    return count;
   } finally {
-    (mod as any)._free(ptr);
+    mod._free(ptr);
   }
-
-  if (count < 0) throw new Error('wasm_load_csv returned error');
-  return count;
 }
 
 export async function isReady(): Promise<boolean> {

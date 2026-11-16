@@ -1,86 +1,89 @@
-name: Deploy Web App to GitHub Pages
+name: Build and deploy Stream-C to GitHub Pages
 
 on:
-  workflow_run:
-    workflows: ["CI - Build C++ & WASM"]
-    types:
-      - completed
+  push:
+    branches: [main, master]
+  workflow_dispatch:
 
 permissions:
-  actions: read
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: Build Frontend & Deploy to GitHub Pages
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  build:
+    name: Prepare data, compile C++/WASM, and build site
     runs-on: ubuntu-latest
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: read
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies
+      - name: Install native dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libcurl4-openssl-dev
 
-      - name: Download & Preprocess CSV Data
-        run: |
-          # Build the fetch tool, download data, then clean it
-          make data/fetchData
-          ./data/fetchData
-          make preprocess INPUT=data/data.csv OUTPUT=data/data_clean.csv REPORT=build/preprocessing_report.json
-          # Copy cleaned CSV to web/public so the frontend can fetch it
-          mkdir -p web/public
-          cp data/data_clean.csv web/public/data_clean.csv
-
-      - name: Download WASM Artifacts
-        uses: actions/download-artifact@v4
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
         with:
-          name: wasm-dist
-          path: web/public
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
+          version: 3.1.53
+          actions-cache-folder: emsdk-cache
 
-      - name: Setup Node.js
+      - name: Set up Node and pnpm
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 9
 
-      - name: Install Frontend Dependencies
+      - name: Run C++ tests
         run: |
-          cd web
-          pnpm install
+          make test-search
+          make test-wasm-bridge
+          make test-preprocess
+          g++ -Wall -Wextra -std=c++17 main.cpp -o programa
 
-      - name: Build Web Application
+      - name: Download and preprocess movie catalog
+        run: make web-data
+
+      - name: Compile C++ engine to WebAssembly
+        run: make wasm
+
+      - name: Install frontend dependencies and build site
         run: |
           cd web
+          pnpm install --frozen-lockfile
+          pnpm lint
           pnpm build
 
-      - name: Setup Pages
+      - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload Pages Artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './web/dist'
+          path: web/dist
 
+  deploy:
+    name: Deploy site
+    needs: build
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

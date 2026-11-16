@@ -27,6 +27,35 @@ Streaming-C/
 └── README.md         # Documentación general del proyecto
 ```
 
+## Búsqueda e indexación
+
+El flujo de búsqueda está organizado con cuatro patrones de diseño:
+
+- **Facade:** `SearchEngine::search` coordina la consulta, los índices, los filtros, el ranking y la paginación.
+- **Strategy:** las consultas con texto y las consultas solo con filtros usan recorridos distintos.
+- **Factory:** `SearchStrategyFactory` elige y crea la estrategia según la consulta.
+- **Builder:** `SearchQueryBuilder` permite construir consultas con texto y paginación de forma encadenada.
+
+Las búsquedas de títulos usan el suffix array; las de sinopsis usan un índice de trigramas y verifican el término sobre la trama original. Las consultas con varias palabras combinan resultados de ambas fuentes. En compilaciones nativas, los términos del suffix array se consultan en paralelo con un máximo de cuatro tareas; WebAssembly conserva la ruta secuencial porque se compila sin pthreads.
+
+### Ejecutar la aplicación web localmente
+
+Se requiere Node.js, pnpm, Emscripten (`emcc`), un compilador C++ y libcurl. `pnpm dev` prepara el catálogo en `data/` si falta, lo limpia, lo copia a `web/public/data_clean.csv`, compila `wasm_bridge.cpp` y finalmente inicia Vite:
+
+```sh
+cd web
+pnpm install
+pnpm dev
+```
+
+El CSV público es un artefacto generado por `make web-data`; el original y el limpio canónico viven en `data/`. Para preparar solo la copia pública desde la raíz, ejecuta `make web-data`; para compilar solo el módulo C++ ejecuta `make wasm`.
+
+### CI/CD de GitHub Pages
+
+`.github/workflows/ci.yml` valida cada push y pull request: compila el limpiador y el programa nativo, ejecuta las pruebas de búsqueda, del puente C++/WASM y del preprocesador, compila el módulo WASM y valida el frontend.
+
+`.github/workflows/deploy.yml` ejecuta el flujo completo al actualizar `main`/`master` o manualmente: descarga el CSV original, lo limpia, copia el catálogo al sitio, compila el motor C++ a WASM, construye el frontend y publica el artefacto en GitHub Pages. El deploy se construye desde el mismo commit; no descarga artefactos de una ejecución anterior.
+
 # Colaboradores
 
 | Colaborador | github | descripcion |

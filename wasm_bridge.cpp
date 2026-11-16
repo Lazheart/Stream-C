@@ -3,7 +3,6 @@
 // Compiled with emcc; all exported functions are callable from JavaScript
 // via Module.ccall / Module.cwrap.
 
-#include <cstring>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -85,31 +84,24 @@ extern "C" {
 // Returns the number of movies loaded, or -1 on error.
 WASM_EXPORT int wasm_load_csv(const char *csv_text) {
     if (!csv_text) return -1;
+    g_ready = false;
 
     try {
         std::vector<Movie> movies;
-        const char* p = csv_text;
+        std::istringstream input(csv_text);
         bool first_line = true;
         int next_id = 1;
-        std::string line;
+        std::vector<std::string> fields;
 
-        while (*p != '\0') {
-            const char* end = strchr(p, '\n');
-            if (!end) end = p + strlen(p);
-
-            line.assign(p, end - p);
-            if (*end == '\n') p = end + 1;
-            else p = end;
+        while (csv::read_record(input, fields)) {
 
             if (first_line) {
                 first_line = false;
                 continue;
             }
 
-            if (trim(line).empty())
+            if (fields.size() == 1 && trim(fields[0]).empty())
                 continue;
-
-            std::vector<std::string> fields = parse_csv_row(line);
             while (fields.size() < 8) fields.push_back("");
 
             Movie m;
@@ -133,8 +125,14 @@ WASM_EXPORT int wasm_load_csv(const char *csv_text) {
         return -1;
     }
 
-    g_engine.build(g_movies);
-    g_ready = true;
+    try {
+        g_engine = SearchEngine();
+        g_engine.build(g_movies);
+        g_ready = true;
+    } catch (...) {
+        g_movies.clear();
+        return -1;
+    }
 
     return static_cast<int>(g_movies.size());
 }

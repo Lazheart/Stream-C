@@ -42,6 +42,21 @@ $(PREPROCESS_BIN): src/preprocessing/cleanData.cpp
 preprocess: $(PREPROCESS_BIN)
 	./$(PREPROCESS_BIN) "$(INPUT)" "$(OUTPUT)" "$(REPORT)"
 
+# Prepares the CSV in the public directory served by Vite and packaged by Pages.
+# The original and cleaned datasets remain in data/ as the canonical pipeline outputs.
+web-data:
+	@if [ ! -s "data/data_clean.csv" ]; then \
+		$(MAKE) "$(DATA_FILE)" && \
+		$(MAKE) preprocess INPUT="$(DATA_FILE)" OUTPUT="data/data_clean.csv"; \
+	fi
+	mkdir -p web/public
+	cp data/data_clean.csv web/public/data_clean.csv
+
+web-dev:
+	$(MAKE) web-data
+	$(MAKE) wasm
+	cd web && pnpm exec vite --host 0.0.0.0
+
 build/test_preprocessing: tests/test_preprocessing.cpp
 	mkdir -p build
 	$(CXX) $(CXXFLAGS) $< -o $@
@@ -49,16 +64,32 @@ build/test_preprocessing: tests/test_preprocessing.cpp
 test-preprocess: $(PREPROCESS_BIN) build/test_preprocessing
 	./build/test_preprocessing ./$(PREPROCESS_BIN)
 
-build/test_search: tests/test_search.cpp
+build/test_search: tests/test_search.cpp tests/MockMovieLoader.cpp \
+		src/algorithm/loaders/CsvParser.h \
+		src/search/searchEngine.cpp src/algorithm/hashing/MovieHashIndex.cpp \
+		src/algorithm/trees/MovieSuffixArray.cpp src/algorithm/trees/MovieTree.cpp \
+		src/algorithm/tagger.cpp src/search/ranking.cpp
 	mkdir -p build
 	$(CXX) $(CXXFLAGS) $< -o $@
 
 test-search: build/test_search
 	./build/test_search
 
+build/test_wasm_bridge: tests/test_wasm_bridge.cpp wasm_bridge.cpp \
+		src/algorithm/loaders/CsvParser.h src/search/searchEngine.cpp \
+		src/algorithm/hashing/MovieHashIndex.cpp \
+		src/algorithm/trees/MovieSuffixArray.cpp src/algorithm/trees/MovieTree.cpp \
+		src/algorithm/tagger.cpp src/search/ranking.cpp
+	mkdir -p build
+	$(CXX) $(CXXFLAGS) $< -o $@
+
+test-wasm-bridge: build/test_wasm_bridge
+	./build/test_wasm_bridge
+
 # WebAssembly
 EMCC ?= emcc
-EMFLAGS ?= -O3 -std=c++17 \
+EM_CACHE_DIR ?= $(CURDIR)/build/emscripten-cache
+EMFLAGS ?= -O3 -std=c++17 -fexceptions \
 	-s WASM=1 \
 	-s ASSERTIONS=1 \
 	-s INITIAL_MEMORY=134217728 \
@@ -69,8 +100,11 @@ EMFLAGS ?= -O3 -std=c++17 \
 	-s EXPORT_NAME='createStreamingModule' \
 	-s ENVIRONMENT='web'
 
-wasm: wasm_bridge.cpp
-	mkdir -p web/public
-	$(EMCC) $(EMFLAGS) wasm_bridge.cpp -o web/public/streaming.js
+wasm: wasm_bridge.cpp src/algorithm/loaders/CsvParser.h src/search/searchEngine.cpp \
+		src/algorithm/hashing/MovieHashIndex.cpp \
+		src/algorithm/trees/MovieSuffixArray.cpp src/algorithm/trees/MovieTree.cpp \
+		src/algorithm/tagger.cpp src/search/ranking.cpp
+	mkdir -p web/public "$(EM_CACHE_DIR)"
+	EM_CACHE="$(EM_CACHE_DIR)" $(EMCC) $(EMFLAGS) wasm_bridge.cpp -o web/public/streaming.js
 
-.PHONY: run clean preprocess test-preprocess test-search wasm
+.PHONY: run clean preprocess web-data web-dev test-preprocess test-search test-wasm-bridge wasm

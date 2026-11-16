@@ -3,10 +3,13 @@
 #include "../algorithm/trees/MovieSuffixArray.cpp"
 #include "../algorithm/trees/MovieTree.cpp"
 #include "ranking.cpp"
+#include <algorithm>
 #include <climits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 // User request. Every field is optional except that at least one should be set.
@@ -18,6 +21,21 @@ struct SearchQuery {
     std::optional<int> year_to;
     int offset = 0;         // first result index (0-based, for pagination)
     int limit  = 5;         // max results returned (0 = unlimited)
+};
+
+// Builder pattern: keeps query construction readable as the query grows.
+class SearchQueryBuilder {
+  public:
+    SearchQueryBuilder &text(std::string value) { query.text = std::move(value); return *this; }
+    SearchQueryBuilder &genre(std::string value) { query.genre = std::move(value); return *this; }
+    SearchQueryBuilder &tag(std::string value) { query.tag = std::move(value); return *this; }
+    SearchQueryBuilder &years(std::optional<int> from, std::optional<int> to) {
+        query.year_from = from; query.year_to = to; return *this;
+    }
+    SearchQueryBuilder &page(int offset, int limit) { query.offset = offset; query.limit = limit; return *this; }
+    SearchQuery build() const { return query; }
+  private:
+    SearchQuery query;
 };
 
 class SearchEngine {
@@ -45,12 +63,10 @@ class SearchEngine {
 
     // Returns ranked, paginated results for the query.
     std::vector<const Movie *> search(const SearchQuery &q) const {
-        std::vector<const Movie *> candidates;
-
-        if (!q.text.empty())
-            candidates = search_by_text(q);
-        else
-            candidates = search_by_filters(q);
+        // Facade pattern: callers use one operation for index lookup,
+        // filtering, de-duplication, ranking, and pagination.
+        auto strategy = SearchStrategyFactory::create(q);
+        std::vector<const Movie *> candidates = strategy->execute(*this, q);
 
         // Deduplicate (suffix array + filter paths may yield duplicates).
         candidates = deduplicate(candidates);
@@ -62,6 +78,33 @@ class SearchEngine {
     }
 
   private:
+    // Strategy pattern: select candidate-generation behavior by query type.
+    class SearchStrategy {
+      public:
+        virtual ~SearchStrategy() = default;
+        virtual std::vector<const Movie *> execute(const SearchEngine &, const SearchQuery &) const = 0;
+    };
+    class TextSearchStrategy final : public SearchStrategy {
+      public:
+        std::vector<const Movie *> execute(const SearchEngine &engine, const SearchQuery &q) const override {
+            return engine.search_by_text(q);
+        }
+    };
+    class FilterSearchStrategy final : public SearchStrategy {
+      public:
+        std::vector<const Movie *> execute(const SearchEngine &engine, const SearchQuery &q) const override {
+            return engine.search_by_filters(q);
+        }
+    };
+    // Factory pattern: centralizes creation of the matching search strategy.
+    class SearchStrategyFactory {
+      public:
+        static std::unique_ptr<SearchStrategy> create(const SearchQuery &q) {
+            if (!q.text.empty()) return std::make_unique<TextSearchStrategy>();
+            return std::make_unique<FilterSearchStrategy>();
+        }
+    };
+
     std::vector<Movie> catalog;
     MovieHashIndex hash_index;
     MovieTree      tree_index;
@@ -71,12 +114,12 @@ class SearchEngine {
     // Text search: suffix array finds ids, hash index resolves them, then all
     // filters (genre, year, tag) are applied.
     std::vector<const Movie *> search_by_text(const SearchQuery &q) const {
-        std::vector<const Movie *> results;
-        for (int id : suffix_array.search_phrase(q.text)) {
-            const Movie *m = hash_index.get_by_id(id);
-            if (m && matches(*m, q))
-                results.push_back(m);
-        }
+        std::vector<const Movie *> results = resolve_ids(suffix_array.search_phrase(q.text));
+        auto plot_matches = hash_index.get_by_plot_terms(q.text);
+        results.insert(results.end(), plot_matches.begin(), plot_matches.end());
+        results.erase(std::remove_if(results.begin(), results.end(), [&](const Movie *m) {
+            return !m || !matches(*m, q);
+        }), results.end());
         return results;
     }
 
@@ -104,11 +147,10 @@ class SearchEngine {
             }
         }
 
-        // Tag-only search (no genre/year specified): scan all via genre index,
-        // but since we have no "all movies" iterator, we rely on the caller
-        // combining text + tag or genre + tag.  For a bare tag query we return
-        // an empty set to avoid a full table scan.
-        // (Full-catalog tag queries should be paired with text or genre.)
+        // Tag-only search scans the indexed catalog because tags are generated
+        // from multiple metadata fields rather than stored in a dedicated index.
+        else if (!q.tag.empty())
+            pool = hash_index.get_all();
 
         // Apply tag filter on top of pool.
         if (!q.tag.empty()) {

@@ -23,7 +23,9 @@ jobs:
 
       - name: Verify C++ Compilation
         run: |
-          make PREPROCESS_BIN=build/cleanData
+          make build/cleanData
+          make test-search
+          make test-wasm-bridge
           make test-preprocess
           g++ -Wall -Wextra -std=c++17 main.cpp -o programa
 
@@ -50,9 +52,19 @@ jobs:
           mkdir -p web/public
           make wasm
 
-      - name: Upload WASM Artifacts
-        uses: actions/upload-artifact@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          name: wasm-dist
-          path: web/public/
-          if-no-files-found: error
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Check Web Frontend
+        run: |
+          cd web
+          pnpm install --frozen-lockfile
+          pnpm lint
+          pnpm build

@@ -1,4 +1,5 @@
 #include "MovieLoader.cpp"
+#include "CsvParser.h"
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -6,42 +7,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-// Parses a single CSV row, respecting double-quoted fields that may contain
-// commas or embedded double-quotes (RFC 4180 style).
-static std::vector<std::string> parse_csv_row(const std::string &line) {
-    std::vector<std::string> fields;
-    std::string field;
-    bool in_quotes = false;
-
-    for (size_t i = 0; i < line.size(); ++i) {
-        char c = line[i];
-        if (in_quotes) {
-            if (c == '"') {
-                // Peek at next char: "" → literal quote, otherwise end of field.
-                if (i + 1 < line.size() && line[i + 1] == '"') {
-                    field += '"';
-                    ++i;
-                } else {
-                    in_quotes = false;
-                }
-            } else {
-                field += c;
-            }
-        } else {
-            if (c == '"') {
-                in_quotes = true;
-            } else if (c == ',') {
-                fields.push_back(std::move(field));
-                field.clear();
-            } else {
-                field += c;
-            }
-        }
-    }
-    fields.push_back(std::move(field)); // last field
-    return fields;
-}
 
 // Trims leading and trailing whitespace from a string.
 static std::string trim(const std::string &s) {
@@ -78,11 +43,11 @@ class CsvMovieLoader : public MovieLoader {
             throw std::runtime_error("CsvMovieLoader: cannot open file: " + path);
 
         std::vector<Movie> movies;
-        std::string line;
         bool first_line = true;
         int next_id = 1;
+        std::vector<std::string> fields;
 
-        while (std::getline(file, line)) {
+        while (csv::read_record(file, fields)) {
             // Skip header row.
             if (first_line) {
                 first_line = false;
@@ -90,10 +55,8 @@ class CsvMovieLoader : public MovieLoader {
             }
 
             // Skip blank lines.
-            if (trim(line).empty())
+            if (fields.size() == 1 && trim(fields[0]).empty())
                 continue;
-
-            std::vector<std::string> fields = parse_csv_row(line);
 
             // Expect at least 8 columns; pad missing ones with empty strings.
             while (fields.size() < 8)

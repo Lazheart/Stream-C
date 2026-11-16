@@ -1,5 +1,5 @@
 #include "../src/algorithm/loaders/CsvMovieLoader.cpp"
-#include "../src/algorithm/loaders/MockMovieLoader.cpp"
+#include "MockMovieLoader.cpp"
 #include "../src/search/searchEngine.cpp"
 #include <cassert>
 #include <fstream>
@@ -11,7 +11,7 @@ static void test_csv_loader_reads_rows() {
     const std::string path = "/tmp/stream-c-test-search.csv";
     std::ofstream file(path);
     file << "Release Year,Title,Origin/Ethnicity,Director,Cast,Genre,Wiki Page,Plot\n";
-    file << "2001,\"Bar, Movie\",Peru,Ana,Actor,Drama,https://example.org/a,Historia bar\n";
+    file << "2001,\"Bar, Movie\",Peru,Ana,Actor,Drama,https://example.org/a,\"Historia bar\ncon segunda linea\"\n";
     file << "2002,Simple,USA,Bob,,Comedy,https://example.org/b,Funny\n";
     file.close();
 
@@ -20,7 +20,8 @@ static void test_csv_loader_reads_rows() {
 
     assert(movies.size() == 2);
     assert(movies[0].title == "Bar, Movie");
-    assert(movies[1].cast == "unknown");
+    assert(movies[0].plot == "Historia bar\ncon segunda linea");
+    assert(movies[1].cast.empty());
 }
 
 static void test_search_by_text_tag_and_pagination() {
@@ -32,6 +33,12 @@ static void test_search_by_text_tag_and_pagination() {
     text_query.text = "train";
     auto text_results = engine.search(text_query);
     assert(!text_results.empty());
+
+    SearchQuery plot_query;
+    plot_query.text = "bartender saloon";
+    auto plot_results = engine.search(plot_query);
+    assert(!plot_results.empty());
+    assert(plot_results[0]->title == "Kansas Saloon Smashers");
 
     SearchQuery tag_query;
     tag_query.tag = "western";

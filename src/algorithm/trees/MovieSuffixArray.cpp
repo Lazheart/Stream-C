@@ -1,11 +1,17 @@
 #include "../models/Movie.h"
 #include <algorithm>
 #include <cstddef>
+#ifndef __EMSCRIPTEN__
+#include <future>
+#include <thread>
+#endif
+#include <numeric>
 #include <string>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 
-// Suffix array O(nlogn) over movie titles for substring search.
+// Prefix-doubling suffix array over movie titles for substring search.
 class MovieSuffixArray {
   public:
     MovieSuffixArray() = default;
@@ -13,6 +19,9 @@ class MovieSuffixArray {
 
     // Builds the suffix array from a full collection of movies.
     void build(const std::vector<Movie> &movies) {
+        corpus.clear();
+        position_to_id.clear();
+        suffixes.clear();
         for (const Movie &m : movies) {
             // std::string text = normalize(m.title + " " + m.plot);
             std::string text = normalize(m.title);
@@ -27,12 +36,36 @@ class MovieSuffixArray {
         }
 
         suffixes.resize(corpus.size());
-        for (size_t i = 0; i < corpus.size(); i++)
-            suffixes[i] = i;
+        std::iota(suffixes.begin(), suffixes.end(), size_t{0});
+        if (suffixes.empty()) return;
 
-        std::sort(suffixes.begin(), suffixes.end(), [&](size_t a, size_t b) {
-            return corpus.compare(a, std::string::npos, corpus, b, std::string::npos) < 0;
-        });
+        std::vector<int> rank(corpus.size());
+        std::vector<int> next_rank(corpus.size());
+        for (size_t i = 0; i < corpus.size(); ++i)
+            rank[i] = static_cast<unsigned char>(corpus[i]);
+
+        for (size_t width = 1; width < corpus.size();) {
+            std::sort(suffixes.begin(), suffixes.end(), [&](size_t a, size_t b) {
+                if (rank[a] != rank[b]) return rank[a] < rank[b];
+                const int rank_a = a + width < corpus.size() ? rank[a + width] : -1;
+                const int rank_b = b + width < corpus.size() ? rank[b + width] : -1;
+                return rank_a < rank_b;
+            });
+
+            next_rank[suffixes[0]] = 0;
+            for (size_t i = 1; i < suffixes.size(); ++i) {
+                const size_t previous = suffixes[i - 1];
+                const size_t current = suffixes[i];
+                const int previous_second = previous + width < corpus.size() ? rank[previous + width] : -1;
+                const int current_second = current + width < corpus.size() ? rank[current + width] : -1;
+                next_rank[current] = next_rank[previous] +
+                    (rank[previous] != rank[current] || previous_second != current_second);
+            }
+            rank.swap(next_rank);
+            if (rank[suffixes.back()] == static_cast<int>(suffixes.size() - 1)) break;
+            if (width > corpus.size() / 2) break;
+            width *= 2;
+        }
     }
 
     // Returns ids of movies whose title contains the query (case-insensitive).
@@ -53,26 +86,59 @@ class MovieSuffixArray {
 
     // Returns ids of movies matching any word of the phrase.
     std::vector<int> search_phrase(const std::string &phrase) const {
-        std::unordered_set<int> found;
         std::string normalized = normalize(phrase);
+        std::vector<std::string> words;
         std::string word;
-
         for (char c : normalized) {
             if (c == ' ') {
-                if (!word.empty()) {
-                    for (int id : search(word))
-                        found.insert(id);
-                    word.clear();
-                }
+                if (!word.empty()) { words.push_back(std::move(word)); word.clear(); }
             } else {
                 word += c;
             }
         }
+        if (!word.empty()) words.push_back(std::move(word));
 
-        if (!word.empty())
-            for (int id : search(word))
-                found.insert(id);
+        // Queries with multiple terms are independent over the immutable suffix
+        // array. Run sufficiently large queries concurrently; short queries
+        // stay inline to avoid paying thread-launch overhead.
+        std::vector<std::vector<int>> matches(1);
+#ifndef __EMSCRIPTEN__
+        if (words.size() >= 2) {
+            std::vector<std::future<std::vector<int>>> tasks;
+            const size_t available = std::max(1u, std::thread::hardware_concurrency());
+            const size_t workers = std::min({words.size(), available, size_t{4}});
+            tasks.reserve(workers);
+            for (size_t worker = 0; worker < workers; ++worker) {
+                tasks.emplace_back(std::async(std::launch::async, [this, &words, worker, workers] {
+                    std::vector<int> ids;
+                    for (size_t i = worker; i < words.size(); i += workers) {
+                        auto found = search(words[i]);
+                        ids.insert(ids.end(), found.begin(), found.end());
+                    }
+                    return ids;
+                }));
+            }
+            for (auto &task : tasks) {
+                auto ids = task.get();
+                matches.front().insert(matches.front().end(), ids.begin(), ids.end());
+            }
+        }
+#endif
+        if (words.size() < 2) {
+            if (!words.empty()) matches[0] = search(words[0]);
+        }
+#ifdef __EMSCRIPTEN__
+        else {
+            // The WebAssembly target is built without pthreads.
+            for (const auto &term : words) {
+                auto ids = search(term);
+                matches[0].insert(matches[0].end(), ids.begin(), ids.end());
+            }
+        }
+#endif
 
+        std::unordered_set<int> found;
+        for (const auto &ids : matches) found.insert(ids.begin(), ids.end());
         return std::vector<int>(found.begin(), found.end());
     }
 
