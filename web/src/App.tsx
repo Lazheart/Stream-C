@@ -30,23 +30,6 @@ import {
 // ── Types ────────────────────────────────────────────────────────────────────
 type Page = 'home' | 'search' | 'liked' | 'watchlater'
 
-// ── Helper: genre → emoji mapping ────────────────────────────────────────────
-const genreEmojis: Record<string, string> = {
-  action: '💥', adventure: '🗺️', comedy: '😂', drama: '🎭',
-  horror: '👻', romance: '💕', thriller: '🔪', 'sci-fi': '🚀',
-  'science fiction': '🚀', fantasy: '🧙', animation: '🎨',
-  documentary: '📹', musical: '🎵', western: '🤠', crime: '🔍',
-  mystery: '🕵️', war: '⚔️', biography: '📖', family: '👨‍👩‍👧‍👦',
-  sport: '⚽', history: '📜', noir: '🌑', unknown: '🎬',
-}
-
-function getGenreEmoji(genre: string): string {
-  const key = genre.toLowerCase().trim()
-  for (const [k, v] of Object.entries(genreEmojis)) {
-    if (key.includes(k)) return v
-  }
-  return '🎬'
-}
 function parsePositiveYear(value: string): number | undefined {
   if (!value.trim()) return undefined
   const year = Number(value)
@@ -264,7 +247,6 @@ function App() {
   if (error) {
     return (
       <div className="error-screen" id="error-screen">
-        <div className="emoji">⚠️</div>
         <h2>Error al inicializar</h2>
         <p>
           No se pudo inicializar la aplicación.
@@ -277,7 +259,7 @@ function App() {
           
           {error.includes('Aborted') && (
             <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: '12px', lineHeight: 1.5 }}>
-              💡 <strong>Diagnóstico:</strong> El módulo WebAssembly de C++ sufrió un error fatal y se detuvo (`abort`). Esto suele deberse a:
+              <strong>Diagnóstico:</strong> El módulo WebAssembly de C++ sufrió un error fatal y se detuvo (`abort`). Esto suele deberse a:
               <ul style={{ margin: '6px 0 0 20px' }}>
                 <li>El archivo <code>data_clean.csv</code> contiene filas corruptas o mal formateadas.</li>
                 <li>El archivo <code>streaming.wasm</code> no se encontró en el servidor (Error 404).</li>
@@ -287,12 +269,12 @@ function App() {
           )}
           {error.includes('fetch') && (
             <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: '12px', lineHeight: 1.5 }}>
-              💡 <strong>Diagnóstico:</strong> Hubo un problema de red al intentar descargar los recursos iniciales. Verifica que <code>data_clean.csv</code> y los archivos <code>.wasm</code> estén correctamente publicados.
+              <strong>Diagnóstico:</strong> Hubo un problema de red al intentar descargar los recursos iniciales. Verifica que <code>data_clean.csv</code> y los archivos <code>.wasm</code> estén correctamente publicados.
             </div>
           )}
         </div>
         <button className="btn btn-primary" onClick={() => window.location.reload()}>
-          🔄 Reintentar
+          Reintentar
         </button>
       </div>
     )
@@ -314,33 +296,32 @@ function App() {
             onClick={goHome}
             id="nav-home"
           >
-            🏠 Inicio
+            Inicio
           </button>
           <button
             className={`nav-link ${page === 'search' ? 'active' : ''}`}
             onClick={() => { setPage('search'); setTimeout(() => searchInputRef.current?.focus(), 100) }}
             id="nav-search"
           >
-            🔍 Buscar
+            Buscar
           </button>
           <button
             className={`nav-link ${page === 'liked' ? 'active' : ''}`}
             onClick={() => loadUserPage('liked')}
             id="nav-liked"
           >
-            ❤️ Likes
+            Me gusta
           </button>
           <button
             className={`nav-link ${page === 'watchlater' ? 'active' : ''}`}
             onClick={() => loadUserPage('watchlater')}
             id="nav-watchlater"
           >
-            🕐 Ver después
+            Ver después
           </button>
         </nav>
 
         <div className="search-bar" id="search-bar">
-          <span className="search-icon">🔍</span>
           <input
             ref={searchInputRef}
             type="text"
@@ -359,7 +340,7 @@ function App() {
             title="Mis Likes"
             id="btn-likes"
           >
-            ❤️
+            Me gusta
             {likedSet.size > 0 && <span className="badge">{likedSet.size}</span>}
           </button>
           <button
@@ -368,7 +349,7 @@ function App() {
             title="Ver después"
             id="btn-watchlater"
           >
-            🕐
+            Ver después
             {watchLaterSet.size > 0 && <span className="badge">{watchLaterSet.size}</span>}
           </button>
         </div>
@@ -422,10 +403,9 @@ function App() {
 
         {page === 'liked' && (
           <UserPage
-            title="❤️ Películas con Like"
+            title="Películas que te gustan"
             description="Las películas que te han gustado"
             movies={likedMovies}
-            emptyEmoji="❤️"
             emptyText="Aún no has dado like a ninguna película"
             likedSet={likedSet}
             watchLaterSet={watchLaterSet}
@@ -438,10 +418,9 @@ function App() {
 
         {page === 'watchlater' && (
           <UserPage
-            title="🕐 Ver después"
+            title="Ver después"
             description="Películas guardadas para ver más tarde"
             movies={watchLaterMovies}
-            emptyEmoji="🕐"
             emptyText="No has guardado películas para ver después"
             likedSet={likedSet}
             watchLaterSet={watchLaterSet}
@@ -541,7 +520,7 @@ function HomePage({
       <section className="section" id="featured-section">
         <div className="section-header">
           <h2 className="section-title">
-            <span className="icon">⭐</span> Destacadas
+            Destacadas
           </h2>
         </div>
         <div className="movie-grid stagger">
@@ -563,7 +542,7 @@ function HomePage({
       <section className="section" id="genres-section">
         <div className="section-header">
           <h2 className="section-title">
-            <span className="icon">🎭</span> Explorar por género
+            Explorar por género
           </h2>
         </div>
         <div className="genre-chips">
@@ -573,7 +552,7 @@ function HomePage({
               className="genre-chip"
               onClick={() => onBrowseGenre(g)}
             >
-              {getGenreEmoji(g)} {g}
+              {g}
             </button>
           ))}
         </div>
@@ -584,10 +563,10 @@ function HomePage({
         <section className="section" key={genre}>
           <div className="section-header">
             <h2 className="section-title">
-              <span className="icon">{getGenreEmoji(genre)}</span> {genre}
+              {genre}
             </h2>
             <button className="section-action" onClick={() => onBrowseGenre(genre)}>
-              Ver todo →
+              Ver todo
             </button>
           </div>
           <div className="movie-grid stagger">
@@ -640,7 +619,7 @@ function SearchPage({
   return (
     <div className="search-page" id="search-page">
       <div className="user-page-header fade-in">
-        <h1>🔍 Búsqueda avanzada</h1>
+        <h1>Búsqueda avanzada</h1>
         <p>Busca por texto, género y rango de años — todo procesado en C++ WebAssembly</p>
       </div>
 
@@ -693,7 +672,7 @@ function SearchPage({
             id="filter-year-to"
         />
         <button className="btn btn-primary" onClick={() => onSearch(0)} id="btn-search">
-          🔍 Buscar
+          Buscar
         </button>
       </div>
 
@@ -741,7 +720,6 @@ function SearchPage({
         </>
       ) : (
         <div className="empty-state fade-in">
-          <div className="emoji">🔍</div>
           <h3>Sin resultados</h3>
           <p>Intenta con otros términos de búsqueda o ajusta los filtros</p>
         </div>
@@ -755,7 +733,6 @@ interface UserPageProps {
   title: string
   description: string
   movies: Movie[]
-  emptyEmoji: string
   emptyText: string
   likedSet: Set<string>
   watchLaterSet: Set<string>
@@ -766,7 +743,7 @@ interface UserPageProps {
 }
 
 function UserPage({
-  title, description, movies, emptyEmoji, emptyText,
+  title, description, movies, emptyText,
   likedSet, watchLaterSet,
   onSelectMovie, onToggleLike, onToggleWatchLater, onClear,
 }: UserPageProps) {
@@ -781,7 +758,7 @@ function UserPage({
             style={{ marginTop: 16 }}
             onClick={onClear}
           >
-            🗑️ Limpiar todo
+            Limpiar todo
           </button>
         )}
       </div>
@@ -802,7 +779,6 @@ function UserPage({
         </div>
       ) : (
         <div className="empty-state fade-in">
-          <div className="emoji">{emptyEmoji}</div>
           <h3>{emptyText}</h3>
           <p>Explora el catálogo y comienza a guardar tus favoritas</p>
         </div>
@@ -829,7 +805,7 @@ function MovieCard({
     <div className="movie-card" onClick={onClick}>
       <div className="movie-poster">
         <div className="movie-poster-placeholder">
-          <span className="emoji">{getGenreEmoji(movie.genre)}</span>
+          <span className="poster-label">{movie.genre && movie.genre !== 'unknown' ? movie.genre : 'Película'}</span>
           <span className="year">{movie.year || '—'}</span>
         </div>
         <div className="movie-card-overlay">
@@ -839,14 +815,14 @@ function MovieCard({
               onClick={(e) => { e.stopPropagation(); onToggleLike() }}
               title={isLiked ? 'Quitar like' : 'Dar like'}
             >
-              {isLiked ? '❤️' : '🤍'}
+              {isLiked ? 'Te gusta' : 'Me gusta'}
             </button>
             <button
               className={`card-action-btn ${isWatchLater ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); onToggleWatchLater() }}
               title={isWatchLater ? 'Quitar de ver después' : 'Ver después'}
             >
-              {isWatchLater ? '✅' : '🕐'}
+              {isWatchLater ? 'Guardada' : 'Ver después'}
             </button>
           </div>
         </div>
@@ -901,13 +877,13 @@ function MovieModal({
             {movie.director && movie.director !== 'unknown' && (
               <>
                 <span className="divider" />
-                <span>🎬 {movie.director}</span>
+                <span>{movie.director}</span>
               </>
             )}
             {movie.origin && movie.origin !== 'unknown' && (
               <>
                 <span className="divider" />
-                <span>🌍 {movie.origin}</span>
+                <span>{movie.origin}</span>
               </>
             )}
           </div>
@@ -943,7 +919,7 @@ function MovieModal({
             <div className="modal-section">
               <div className="modal-section-title">Más información</div>
               <a href={movie.wiki_url} target="_blank" rel="noopener noreferrer">
-                📖 Ver en Wikipedia →
+                Ver en Wikipedia
               </a>
             </div>
           )}
@@ -954,13 +930,13 @@ function MovieModal({
             className={`btn btn-primary ${isLiked ? 'active' : ''}`}
             onClick={() => onToggleLike(movie)}
           >
-            {isLiked ? '❤️ Te gusta' : '🤍 Me gusta'}
+            {isLiked ? 'Te gusta' : 'Me gusta'}
           </button>
           <button
             className={`btn btn-secondary ${isWatchLater ? 'active' : ''}`}
             onClick={() => onToggleWatchLater(movie)}
           >
-            {isWatchLater ? '✅ Guardada' : '🕐 Ver después'}
+            {isWatchLater ? 'Guardada' : 'Ver después'}
           </button>
         </div>
       </div>

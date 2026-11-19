@@ -124,6 +124,12 @@ async function loadEngine(): Promise<number> {
   ]);
   if (!resp.ok) throw new Error(`No se pudo cargar ${CSV_URL}: HTTP ${resp.status} ${resp.statusText}`);
   const csvText = await resp.text();
+  if (resp.headers.get('content-type')?.includes('text/html') || /^\s*<!doctype html|^\s*<html\b/i.test(csvText)) {
+    throw new Error(`Se recibió una página HTML en lugar del catálogo CSV. Coloca data_clean.csv en web/public/ para que Vite pueda servirlo en ${CSV_URL}.`);
+  }
+  if (!csvText.trim()) {
+    throw new Error(`El catálogo ${CSV_URL} está vacío. Revisa web/public/data_clean.csv.`);
+  }
 
   // Manually allocate memory for the huge string to avoid stack overflow in ccall
   const lengthBytes = mod.lengthBytesUTF8(csvText);
@@ -133,7 +139,7 @@ async function loadEngine(): Promise<number> {
   try {
     mod.stringToUTF8(csvText, ptr, lengthBytes + 1);
     const count = mod.ccall('wasm_load_csv', 'number', ['number'], [ptr]) as number;
-    if (count < 0) throw new Error('wasm_load_csv returned error');
+    if (count < 0) throw new Error(`El motor no pudo procesar el catálogo CSV. Comprueba que web/public/data_clean.csv tenga el formato esperado y filas válidas.`);
     return count;
   } finally {
     mod._free(ptr);
