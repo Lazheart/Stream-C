@@ -118,10 +118,10 @@ export function initEngine(): Promise<number> {
 }
 
 async function loadEngine(): Promise<number> {
-  const mod = await getModule();
-
-  // Fetch CSV dataset
-  const resp = await fetch(CSV_URL);
+  const [mod, resp] = await Promise.all([
+    getModule(),
+    fetch(CSV_URL),
+  ]);
   if (!resp.ok) throw new Error(`No se pudo cargar ${CSV_URL}: HTTP ${resp.status} ${resp.statusText}`);
   const csvText = await resp.text();
 
