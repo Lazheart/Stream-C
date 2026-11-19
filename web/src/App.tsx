@@ -47,6 +47,11 @@ function getGenreEmoji(genre: string): string {
   }
   return '🎬'
 }
+function parsePositiveYear(value: string): number | undefined {
+  if (!value.trim()) return undefined
+  const year = Number(value)
+  return Number.isInteger(year) && year > 0 ? year : undefined
+}
 
 // ── App ──────────────────────────────────────────────────────────────────────
 function App() {
@@ -151,8 +156,8 @@ function App() {
     const results = await search({
       text: searchQuery || undefined,
       genre: searchGenre || undefined,
-      yearFrom: searchYearFrom ? parseInt(searchYearFrom) : undefined,
-      yearTo: searchYearTo ? parseInt(searchYearTo) : undefined,
+      yearFrom: parsePositiveYear(searchYearFrom),
+      yearTo: parsePositiveYear(searchYearTo),
       offset,
       limit: searchLimit,
       ...overrides,
@@ -662,20 +667,30 @@ function SearchPage({
           ))}
         </select>
         <input
-          className="filter-input"
-          type="number"
-          placeholder="Año desde"
-          value={yearFrom}
-          onChange={(e) => onYearFromChange(e.target.value)}
-          id="filter-year-from"
+            className="filter-input"
+            type="number"
+            min={1}
+            step={1}
+            placeholder="Año desde"
+            value={yearFrom}
+            onChange={(e) => {
+              const value = e.target.value
+              if (value === '' || parsePositiveYear(value) !== undefined) onYearFromChange(value)
+            }}
+            id="filter-year-from"
         />
         <input
-          className="filter-input"
-          type="number"
-          placeholder="Año hasta"
-          value={yearTo}
-          onChange={(e) => onYearToChange(e.target.value)}
-          id="filter-year-to"
+            className="filter-input"
+            type="number"
+            min={1}
+            step={1}
+            placeholder="Año hasta"
+            value={yearTo}
+            onChange={(e) => {
+              const value = e.target.value
+              if (value === '' || parsePositiveYear(value) !== undefined) onYearToChange(value)
+            }}
+            id="filter-year-to"
         />
         <button className="btn btn-primary" onClick={() => onSearch(0)} id="btn-search">
           🔍 Buscar
